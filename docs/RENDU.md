@@ -285,29 +285,25 @@ Estimez le coût de l'infrastructure pour 24h de fonctionnement (dev). Utilisez 
 
 ### Rôle 2 — Network Engineer
 
-**Membre** : `<!-- Prénom Nom -->`
+**Membre :** Fatima El Haouza
 
-**Ce que j'ai livré** :
+**Ce que j'ai livré :**
+- `modules/networking/main.tf` — VPC (10.30.0.0/16) + 6 subnets (2 publics, 2 privés app, 2 privés DB) sur 2 AZ
+- Internet Gateway + NAT Gateway (single AZ, dans le subnet public AZ-a)
+- Route tables publique (vers IGW) et privée (vers NAT) + 6 associations de subnets
+- Security group pour les VPC endpoints (443 depuis le CIDR du VPC)
+- 3 VPC Endpoints : Gateway S3 (gratuit), Interface Secrets Manager et Interface KMS (DNS privé activé)
+- Correction de `variables.tf` : AZ par défaut passées de `eu-west-1a/1b` à `eu-west-3a/3b`
+- Outputs `vpc_id`, `vpc_cidr`, `public_subnet_ids`, `private_app_subnet_ids`, `private_db_subnet_ids`, `nat_gateway_public_ip`, `vpc_endpoints_security_group_id`
 
-- `<!-- ex: modules/networking/main.tf — VPC + 6 subnets + IGW + NAT -->`
-- `<!-- ex: route tables publiques et privées avec associations -->`
-- `<!-- ex: VPC endpoints Gateway S3 + Interface Secrets Manager -->`
-- `<!-- ex: outputs vpc_id, public_subnet_ids, private_app_subnet_ids, private_db_subnet_ids -->`
-- `<!-- ex: README.md du module généré via terraform-docs -->`
+**Ce qui m'a surpris ou frustré :**
+La différence entre les VPC endpoints de type Gateway (S3, gratuit, ajoute juste une route) et Interface (Secrets Manager / KMS, payants, créent une ENI avec IP privée). J'ai aussi eu un souci avec ma version de Terraform (1.7.5) qui n'était pas compatible avec `required_version >= 1.10.0` — il a fallu mettre à jour le binaire manuellement.
 
-**Ce qui m'a surpris ou frustré** :
+**Ce que j'ai appris :**
+À structurer un module Terraform en plusieurs fichiers (variables, outputs, locals, main, versions), à utiliser `for_each` avec des maps AZ → CIDR calculées via `cidrsubnet()`, et le rôle des VPC endpoints pour réduire le trafic NAT.
 
-> *Exemple : "La différence entre VPC endpoint Gateway (S3, DynamoDB, gratuit) et Interface (Secrets Manager, payant à l'heure) — j'ai failli mettre Interface pour S3."*
+**Hash du dernier commit significatif que j'ai fait :** `efb0e95`
 
-<!-- remplir ici -->
-
-**Ce que j'ai appris** :
-
-<!-- remplir ici -->
-
-**Hash du dernier commit significatif que j'ai fait** : `<!-- ex: a1b2c3d -->`
-
----
 
 ### Rôle 3 — Compute Engineer
 
