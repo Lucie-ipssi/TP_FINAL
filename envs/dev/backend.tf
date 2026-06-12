@@ -13,7 +13,7 @@ terraform {
     # Remplacez la valeur ci-dessous par le nom exact renvoye par le script.
     bucket = "tf-state-equipe4-kolab"
     key    = "envs/dev/terraform.tfstate"
-    region = "eu-west-1"
+    region = "eu-west-3"
 
     # Chiffrement cote objet state via la CMK bootstrap (alias cree par le script)
     encrypt    = true
