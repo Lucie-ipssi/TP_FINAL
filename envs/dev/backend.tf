@@ -11,7 +11,7 @@ terraform {
     # 🟣 A ADAPTER : nom du bucket cree par bootstrap/create-state-bucket.sh
     # Par defaut le script cree "tf-state-kolab-formation-<USERNAME>".
     # Remplacez la valeur ci-dessous par le nom exact renvoye par le script.
-    bucket = "tf-state-kolab-formation-equipe4"
+    bucket = "tf-state-equipe4-kolab"
     key    = "envs/dev/terraform.tfstate"
     region = "eu-west-1"
 
