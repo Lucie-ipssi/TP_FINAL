@@ -51,62 +51,26 @@ resource "aws_iam_role" "app" {
   assume_role_policy = data.aws_iam_policy_document.app_assume_role.json
 }
 
-# =============================================================================
-# Passwords + Secrets Manager
-# =============================================================================
+data "aws_iam_policy_document" "app_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
 
-# -----------------------------------------------------------------------------
-# Passwords générés
-# -----------------------------------------------------------------------------
-
-# Mot de passe DB (24 caractères, pas de caractères spéciaux)
-resource "random_password" "db" {
-  length           = 24
-  special          = false
-  override_special = ""
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+  }
 }
-
-# Mot de passe admin (20 caractères, caractères spéciaux autorisés)
-resource "random_password" "admin" {
-  length  = 20
-  special = true
+resource "aws_iam_instance_profile" "app" {
+  name = "${local.name_prefix}-app"
+  role = aws_iam_role.app.name
 }
+locals {
+  name_prefix = "${var.project_name}-${var.environment}"
 
-# -----------------------------------------------------------------------------
-# Secret Manager : DB password
-# -----------------------------------------------------------------------------
-
-resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${local.name_prefix}-db-password"
-  kms_key_id              = aws_kms_key.main.arn
-  recovery_window_in_days = 0
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-db-password"
-  })
+  common_tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 }
-
-resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id     = aws_secretsmanager_secret.db_password.id
-  secret_string = random_password.db.result
-}
-
-# -----------------------------------------------------------------------------
-# Secret Manager : Admin password
-# -----------------------------------------------------------------------------
-
-resource "aws_secretsmanager_secret" "admin_password" {
-  name                    = "${local.name_prefix}-admin-password"
-  kms_key_id              = aws_kms_key.main.arn
-  recovery_window_in_days = 0
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-admin-password"
-  })
-}
-
-resource "aws_secretsmanager_secret_version" "admin_password" {
-  secret_id     = aws_secretsmanager_secret.admin_password.id
-  secret_string = random_password.admin.result
-}
-

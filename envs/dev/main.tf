@@ -1,7 +1,29 @@
+# =============================================================================
+# AMI Amazon Linux 2023
+# =============================================================================
 data "aws_ami" "al2023" {
   most_recent = true
   owners      = ["amazon"]
 
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+# =============================================================================
+# Networking
+# =============================================================================
 module "networking" {
   source       = "../../modules/networking"
   project_name = var.project_name
@@ -10,6 +32,9 @@ module "networking" {
   azs          = ["eu-west-3a", "eu-west-3b"]
 }
 
+# =============================================================================
+# Security
+# =============================================================================
 module "security" {
   source             = "../../modules/security"
   project_name       = var.project_name
@@ -19,6 +44,9 @@ module "security" {
   allowed_admin_cidr = var.allowed_admin_cidr
 }
 
+# =============================================================================
+# Data layer (RDS + S3)
+# =============================================================================
 module "data" {
   source                 = "../../modules/data"
   project_name           = var.project_name
@@ -30,29 +58,38 @@ module "data" {
   db_password_secret_arn = module.security.db_password_secret_arn
 }
 
+# =============================================================================
+# Compute (EC2 / ASG / ALB)
+# =============================================================================
 module "compute" {
   source = "../../modules/compute"
 
-  project_name  = var.project_name
-  environment   = var.environment
+  project_name = var.project_name
+  environment  = var.environment
 
-  vpc_id                  = module.networking.vpc_id
-  public_subnet_ids       = module.networking.public_subnet_ids
-  private_app_subnet_ids  = module.networking.private_app_subnet_ids
+  vpc_id                 = module.networking.vpc_id
+  public_subnet_ids      = module.networking.public_subnet_ids
+  private_app_subnet_ids = module.networking.private_app_subnet_ids
 
-  alb_security_group_id   = module.security.alb_security_group_id
-  app_security_group_id   = module.security.app_security_group_id
+  alb_security_group_id = module.security.alb_security_group_id
+  app_security_group_id = module.security.app_security_group_id
 
-  app_iam_instance_profile = module.security.app_iam_instance_profile
+  app_instance_profile_name = module.security.app_instance_profile_name
 
-  db_endpoint             = module.data.db_endpoint
-  db_name                 = module.data.db_name
-  db_username             = module.data.db_username
-  db_password_secret_arn  = module.security.db_password_secret_arn
+  db_endpoint            = module.data.db_endpoint
+  db_name                = module.data.db_name
+  db_username            = module.data.db_username
+  db_password_secret_arn = module.security.db_password_secret_arn
 
-  s3_primary_bucket_name  = module.data.s3_primary_bucket_name
+  admin_password_secret_arn = module.security.admin_password_secret_arn
+
+  s3_primary_bucket_name = module.data.s3_primary_bucket_name
+
+  s3_logs_bucket_name = module.data.s3_logs_bucket_name
 }
-
+# =============================================================================
+# IAM policy for S3 access
+# =============================================================================
 resource "aws_iam_role_policy" "app_s3_scoped" {
   name = "kolab-dev-app-s3-scoped"
   role = module.security.app_iam_role_name
@@ -83,23 +120,9 @@ resource "aws_iam_role_policy" "app_s3_scoped" {
   })
 }
 
-=======
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-
-  filter {
-    name   = "architecture"
-    values = ["x86_64"]
-  }
-
-  filter {
-    name   = "state"
-    values = ["available"]
-  }
-}
-
+# =============================================================================
+# TLS certificate
+# =============================================================================
 resource "tls_private_key" "cert" {
   algorithm = "RSA"
   rsa_bits  = 4096
@@ -130,5 +153,8 @@ resource "aws_acm_certificate" "cert" {
     create_before_destroy = true
   }
 }
-data "aws_region" "current" {}
 
+# =============================================================================
+# Current region
+# =============================================================================
+data "aws_region" "current" {}

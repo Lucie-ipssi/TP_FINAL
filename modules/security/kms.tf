@@ -100,3 +100,7 @@ resource "aws_kms_alias" "main" {
   name          = "alias/${local.name_prefix}-main"
   target_key_id = aws_kms_key.main.key_id
 }
+
+data "aws_partition" "current" {}
+
+data "aws_caller_identity" "current" {}

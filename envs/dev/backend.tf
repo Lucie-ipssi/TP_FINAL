@@ -16,8 +16,7 @@ terraform {
     region = "eu-west-3"
 
     # Chiffrement cote objet state via la CMK bootstrap (alias cree par le script)
-    encrypt    = true
-    kms_key_id = "alias/tf-state-kolab-formation"
+    encrypt = true
 
     # Locking natif S3 (TF 1.10+). Remplace DynamoDB.
     use_lockfile = true
