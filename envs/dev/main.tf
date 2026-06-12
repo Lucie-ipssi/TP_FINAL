@@ -1,28 +1,6 @@
-# =============================================================================
-# envs/dev/main.tf
-# ROLE 1 (Platform Lead) — orchestration des 4 modules.
-# =============================================================================
-# OBJECTIF : faire dialoguer les 4 modules en passant les outputs du premier
-#   en inputs du suivant. L ordre ne compte pas pour Terraform (il resout le
-#   graphe de dependances via les references) — on ecrit dans un ordre logique
-#   de lecture.
-#
-# Structure type :
-#   module "networking" { source = "../../modules/networking" ... }
-#   module "security"   { source = "../../modules/security"   ... }
-#   module "data"       { source = "../../modules/data"       ... }
-#   module "compute"    { source = "../../modules/compute"    ... }
-#
-# 🟡 DEPENDANCE CIRCULAIRE resolue ainsi :
-#   security produit : kms_key_arn, db_password_secret_arn, admin_password_secret_arn,
-#                      app_iam_role_name, instance_profile, SGs
-#   data     produit : s3_primary_bucket_arn, s3_primary_bucket_name, s3_logs_bucket_*,
-#                      db_endpoint, db_name, db_username
-#
-#   La policy IAM "app_s3_scoped" (qui accorde a l EC2 l acces au bucket S3 primary)
-#   a besoin des deux : app_iam_role_name (security) ET s3_primary_bucket_arn (data).
-#   -> on la declare ici, hors des modules, comme aws_iam_role_policy.
-# =============================================================================
+data "aws_ami" "al2023" {
+  most_recent = true
+  owners      = ["amazon"]
 
 module "networking" {
   source       = "../../modules/networking"
@@ -104,4 +82,53 @@ resource "aws_iam_role_policy" "app_s3_scoped" {
     ]
   })
 }
+
+=======
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+resource "tls_private_key" "cert" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "tls_self_signed_cert" "cert" {
+  private_key_pem = tls_private_key.cert.private_key_pem
+
+  subject {
+    common_name  = "nextcloud-${var.environment}.kolab.local"
+    organization = "Kolab"
+  }
+
+  validity_period_hours = 8760
+
+  allowed_uses = [
+    "digital_signature",
+    "key_encipherment",
+    "server_auth",
+  ]
+}
+
+resource "aws_acm_certificate" "cert" {
+  private_key      = tls_private_key.cert.private_key_pem
+  certificate_body = tls_self_signed_cert.cert.cert_pem
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+data "aws_region" "current" {}
 
