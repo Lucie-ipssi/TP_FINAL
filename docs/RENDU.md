@@ -34,11 +34,11 @@
 
 | Prénom Nom | Rôle assigné | Email | Compte GitHub |
 |------------|--------------|-------|---------------|
-| `<!-- remplir -->` | Platform Lead (Rôle 1) | `prenom.nom@domaine.fr` | `@ghuser` |
-| `<!-- remplir -->` | Network Engineer (Rôle 2) | | |
-| `<!-- remplir -->` | Compute Engineer (Rôle 3) | | |
-| `<!-- remplir -->` | Data Engineer (Rôle 4) | | |
-| `<!-- remplir -->` | Security Engineer (Rôle 5) | | |
+| `<!-- remplir -->` | Platform Lead (Rôle 1) | `l.bigouraux@ecole-ipssi.net` | `lucie-ipssi` |
+| `<!-- remplir -->` | Network Engineer (Rôle 2) | `elhaouzafatimazahra@gmail.com`| `elhaouzafatimazahra-jpg` |
+| `<!-- remplir -->` | Compute Engineer (Rôle 3) |`neguenyann4@gmail.com` |  `neguenyann`|
+| `<!-- remplir -->` | Data Engineer (Rôle 4) |`juniasgbenou0@gmail.com` |`jxnxas-gb` |
+| `<!-- remplir -->` | Security Engineer (Rôle 5) | `l.bigouraux@ecole-ipssi.net`| `lucie-ipssi` |
 
 > 🔷 Équipe à 4 personnes : indiquez qui a fusionné le rôle Security dans le rôle Platform.
 >
