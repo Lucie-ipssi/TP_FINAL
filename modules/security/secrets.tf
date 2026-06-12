@@ -28,8 +28,62 @@
 #   - 30 en prod : fenetre de recuperation contre suppression accidentelle.
 # =============================================================================
 
-# TODO(role-5) : random_password "db" + "admin"
+# =============================================================================
+# Passwords + Secrets Manager
+# =============================================================================
 
-# TODO(role-5) : aws_secretsmanager_secret "db_password" + _version
+# -----------------------------------------------------------------------------
+# Passwords générés
+# -----------------------------------------------------------------------------
 
-# TODO(role-5) : aws_secretsmanager_secret "admin_password" + _version
+# Mot de passe DB (24 caractères, pas de caractères spéciaux)
+resource "random_password" "db" {
+  length           = 24
+  special          = false
+  override_special = ""
+}
+
+# Mot de passe admin (20 caractères, caractères spéciaux autorisés)
+resource "random_password" "admin" {
+  length  = 20
+  special = true
+}
+
+# -----------------------------------------------------------------------------
+# Secret Manager : DB password
+# -----------------------------------------------------------------------------
+
+resource "aws_secretsmanager_secret" "db_password" {
+  name                       = "${local.name_prefix}-db-password"
+  kms_key_id                 = aws_kms_key.main.arn
+  recovery_window_in_days    = 0
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-password"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = random_password.db.result
+}
+
+# -----------------------------------------------------------------------------
+# Secret Manager : Admin password
+# -----------------------------------------------------------------------------
+
+resource "aws_secretsmanager_secret" "admin_password" {
+  name                       = "${local.name_prefix}-admin-password"
+  kms_key_id                 = aws_kms_key.main.arn
+  recovery_window_in_days    = 0
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-admin-password"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "admin_password" {
+  secret_id     = aws_secretsmanager_secret.admin_password.id
+  secret_string = random_password.admin.result
+}
+
