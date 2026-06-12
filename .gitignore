@@ -47,3 +47,5 @@ infracost*.json
 # tfsec / checkov
 .tfsec/
 checkov-report.*
+
+*.zip
