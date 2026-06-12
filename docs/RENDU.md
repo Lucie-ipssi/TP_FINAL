@@ -34,11 +34,11 @@
 
 | Prénom Nom | Rôle assigné | Email | Compte GitHub |
 |------------|--------------|-------|---------------|
-| `<!-- remplir -->` | Platform Lead (Rôle 1) | `l.bigouraux@ecole-ipssi.net` | `lucie-ipssi` |
-| `<!-- remplir -->` | Network Engineer (Rôle 2) | `elhaouzafatimazahra@gmail.com`| `elhaouzafatimazahra-jpg` |
-| `<!-- remplir -->` | Compute Engineer (Rôle 3) |`neguenyann4@gmail.com` |  `neguenyann`|
-| `<!-- remplir -->` | Data Engineer (Rôle 4) |`juniasgbenou0@gmail.com` |`jxnxas-gb` |
-| `<!-- remplir -->` | Security Engineer (Rôle 5) | `l.bigouraux@ecole-ipssi.net`| `lucie-ipssi` |
+| `Lucie Bigouraux` | Platform Lead (Rôle 1) | `l.bigouraux@ecole-ipssi.net` | `lucie-ipssi` |
+| `Fatima El Haouza` | Network Engineer (Rôle 2) | `elhaouzafatimazahra@gmail.com`| `elhaouzafatimazahra-jpg` |
+| `Yann Neguen` | Compute Engineer (Rôle 3) |`neguenyann4@gmail.com` |  `neguenyann`|
+| `Junias Gbenou` | Data Engineer (Rôle 4) |`juniasgbenou0@gmail.com` |`jxnxas-gb` |
+| `Lucie Bigouraux` | Security Engineer (Rôle 5) | `l.bigouraux@ecole-ipssi.net`| `lucie-ipssi` |
 
 > 🔷 Équipe à 4 personnes : indiquez qui a fusionné le rôle Security dans le rôle Platform.
 >
@@ -47,7 +47,7 @@
 ---
 
 ## Section 2 — Résumé architecture
-
+VPC 10.30.0.0/16 sur 2 AZ (eu-west-3a, eu-west-3b) avec 6 subnets (2 publics, 2 app, 2 db). ALB public HTTPS self-signed → ASG d'une EC2 t3.small privée qui exécute Nextcloud en container Docker. RDS PostgreSQL Multi-AZ en subnet db, avec rds.force_ssl activé. Stockage primaire S3 chiffré KMS (CMK), logs ALB sur second bucket S3 chiffré AES256 avec cycle de vie Glacier. Secrets DB et admin Nextcloud dans Secrets Manager, lus par l'EC2 via IAM Instance Profile (IMDSv2) au boot, avec VPC Endpoints S3/Secrets Manager/KMS pour limiter le trafic NAT.
 **En 5 lignes maximum**, décrivez l'infrastructure déployée (couches, AZ, interactions principales).
 
 > *Exemple attendu :*
@@ -57,13 +57,64 @@
 
 ### Schéma Mermaid (à jour avec ce qui a été réellement déployé)
 
-```mermaid
 flowchart TB
     t_user((Utilisateur))
-    %% TODO : remplacer par votre schema d architecture final
-    %% Incluez au minimum : VPC, subnets, ALB, ASG, RDS, S3, Secrets Manager, KMS
-    t_user --> t_todo[TODO remplacer ce schema]
-```
+
+    subgraph t_internet[Internet]
+        t_dns[DNS public ALB]
+    end
+
+    subgraph t_vpc[VPC 10.30.0.0/16 eu-west-3]
+        subgraph t_public[Subnets publics AZ-a / AZ-b]
+            t_alb[ALB HTTPS 443<br/>self-signed cert]
+            t_nat[NAT Gateway]
+        end
+
+        subgraph t_private_app[Subnets prives app AZ-a / AZ-b]
+            t_asg[ASG single EC2<br/>Docker + Nextcloud]
+        end
+
+        subgraph t_private_db[Subnets prives db AZ-a / AZ-b]
+            t_rds[(RDS PostgreSQL<br/>Multi-AZ)]
+        end
+
+        t_vpce_s3[VPC Endpoint S3]
+        t_vpce_secrets[VPC Endpoint Secrets Manager]
+        t_vpce_kms[VPC Endpoint KMS]
+    end
+
+    subgraph t_aws[Services AWS regionaux]
+        t_s3_primary[S3 primary storage<br/>fichiers Nextcloud<br/>KMS]
+        t_s3_logs[S3 ALB logs<br/>AES256 + Glacier]
+        t_secrets[Secrets Manager<br/>db_pwd + admin_pwd]
+        t_kms[KMS CMK<br/>rotation activee]
+    end
+
+    t_user --> t_dns
+    t_dns --> t_alb
+    t_alb --> t_asg
+    t_asg --> t_rds
+    t_asg -->|IAM role| t_vpce_s3
+    t_vpce_s3 --> t_s3_primary
+    t_asg -->|IAM role| t_vpce_secrets
+    t_vpce_secrets --> t_secrets
+    t_asg -->|IAM role| t_vpce_kms
+    t_vpce_kms --> t_kms
+    t_alb -->|access logs| t_s3_logs
+    t_asg -->|egress updates| t_nat
+
+    t_kms -.chiffre.-> t_s3_primary
+    t_kms -.chiffre.-> t_rds
+    t_kms -.chiffre.-> t_secrets
+
+    classDef alb fill:#fff3cd,stroke:#ffc107
+    classDef app fill:#d1e7dd,stroke:#198754
+    classDef data fill:#cfe2ff,stroke:#0d6efd
+    classDef sec fill:#f8d7da,stroke:#dc3545
+    class t_alb,t_dns alb
+    class t_asg,t_nat app
+    class t_rds,t_s3_primary,t_s3_logs data
+    class t_secrets,t_kms,t_vpce_s3,t_vpce_secrets,t_vpce_kms sec
 
 > 🔹 Astuce : copiez le schéma du fichier `ARCHITECTURE.md` que vous avez maintenu pendant la journée.
 
@@ -75,10 +126,10 @@ Listez **au minimum 3 arbitrages** que vous avez faits pendant le TP (choix stru
 
 ### Arbitrage 1
 
-- **Choix retenu** : `<!-- remplir -->`
-- **Alternative envisagée** : `<!-- remplir -->`
-- **Raison** : `<!-- remplir -->`
-- **Conséquence / limite** : `<!-- remplir -->`
+- **Choix retenu** : ASG à instance unique (`min=1 max=2 desired=1`).
+- **Alternative envisagée** : 2 instances actives derrière l'ALB.
+- **Raison** : Nextcloud sans Redis/cluster verrouille les fichiers au niveau disque — deux instances actives entraîneraient des erreurs de file locking sur le stockage S3 partagé.
+- **Conséquence / limite** : pas de haute disponibilité applicative sur ce TP, mais l'ASG redémarre automatiquement l'instance en cas de crash.
 
 > *Exemple :*
 >
@@ -89,26 +140,29 @@ Listez **au minimum 3 arbitrages** que vous avez faits pendant le TP (choix stru
 
 ### Arbitrage 2
 
-- **Choix retenu** : `<!-- remplir -->`
-- **Alternative envisagée** : `<!-- remplir -->`
-- **Raison** : `<!-- remplir -->`
-- **Conséquence / limite** : `<!-- remplir -->`
+- **Choix retenu** : certificat self-signed via `tls_private_key` + `aws_acm_certificate` (import) au lieu d'ACM public.
+- **Alternative envisagée** : certificat ACM public validé par Route53.
+- **Raison** : pas de domaine validé par Route53 disponible pour ce TP.
+- **Conséquence / limite** : warning navigateur accepté volontairement pour la démo (visible sur le screenshot login).
+
 
 > *Exemple : certificat self-signed via `tls_private_key` + `aws_acm_certificate` (import) au lieu d'ACM public, parce qu'on n'a pas de domaine validé par Route53 — conséquence : warning navigateur accepté volontairement pour la démo.*
 
 ### Arbitrage 3
 
-- **Choix retenu** : `<!-- remplir -->`
-- **Alternative envisagée** : `<!-- remplir -->`
-- **Raison** : `<!-- remplir -->`
-- **Conséquence / limite** : `<!-- remplir -->`
+- **Choix retenu** : `single_nat_gateway = true` (1 seule NAT Gateway, AZ-a).
+- **Alternative envisagée** : 2 NAT Gateways (1 par AZ) pour la haute disponibilité sortante.
+- **Raison** : réduire le coût d'environ 30€/jour pour rester dans le budget cible (<150€/jour).
+- **Conséquence / limite** : perte de la HA sortante (si l'AZ-a tombe, plus de sortie Internet pour les subnets privés), acceptable en `dev`.
+
 
 > *Exemple : `single_nat_gateway = true` pour éviter le coût de 2 NAT Gateway sur la journée — conséquence : perte de la HA sortante, acceptable en `dev`.*
 
 ### Arbitrages supplémentaires *(optionnels)*
-
-- `<!-- ajouter si pertinent -->`
-
+- **Choix retenu** : utilisation de VPC Endpoints (S3 Gateway gratuit, Secrets Manager et KMS Interface) plutôt que tout faire passer par la NAT Gateway.
+- **Alternative envisagée** : laisser tout le trafic AWS sortir via NAT.
+- **Raison** : réduire le coût NAT et améliorer la sécurité (pas de sortie Internet pour ces flux sensibles).
+- **Conséquence / limite** : coût supplémentaire des interface endpoints (~0.01$/h chacun), mais compensé par la baisse de trafic NAT.
 ---
 
 ## Section 4 — Retour sur les interfaces inter-modules
@@ -119,23 +173,23 @@ Les interfaces (variables + outputs) étaient figées au kick-off. Répondez aux
 
 > *Exemple : l'interface `security` ↔ `data` à cause du cycle (security a besoin des ARN S3, data a besoin du KMS ARN). On a résolu en passant les ARN S3 en variable de `security` (late binding via `module.data.s3_primary_bucket_arn`).*
 
-<!-- remplir ici -->
+<!-- L'interface `security` ↔ `data` : le module security a besoin des ARN des buckets S3 (pour les policies IAM), tandis que le module data a besoin de l'ARN de la clé KMS pour chiffrer ses ressources. On a résolu en passant les ARN S3 en variable de `security` après création des buckets dans `data` (late binding via `module.data.s3_primary_bucket_arn`). --> 
 
 **Avez-vous dû modifier une interface en cours de route ? Si oui, laquelle et pourquoi ?**
 
 > *Exemple : ajout de la variable `trusted_domain` en entrée du module compute, oubliée dans le contrat initial. PR #12 mergée après review du Platform Lead.*
 
-<!-- remplir ici -->
+<!-- Oui, le module networking a initialement été livré avec un endpoint Secrets Manager uniquement, mais un VPC Endpoint KMS a été ajouté en cours de route (outputs enrichis) pour que l'EC2 puisse déchiffrer les secrets via KMS sans passer par la NAT. -->
 
 **Qu'est-ce qui a le mieux fonctionné dans la collaboration inter-modules ?**
 
 > *Exemple : le fait d'écrire les outputs en premier (avant les resources) a permis aux autres rôles de `plan` avec des valeurs fictives et avancer en parallèle.*
 
-<!-- remplir ici -->
+<!-- Le fait d'avoir des interfaces (variables.tf + outputs.tf) figées et écrites avant les ressources a permis à chaque rôle de travailler en parallèle dès le départ : le rôle Network a livré ses outputs (vpc_id, subnet_ids) en premier, ce qui a débloqué immédiatement les rôles Compute et Data.-->
 
 **Qu'est-ce qui a bloqué ?**
 
-<!-- remplir ici -->
+<!-- La gestion des permissions Git (accès en écriture au repo GitHub) a pris du temps pour certains membres de l'équipe avant de pouvoir push leurs branches. -->
 
 ---
 
@@ -195,27 +249,27 @@ Estimez le coût de l'infrastructure pour 24h de fonctionnement (dev). Utilisez 
 
 | Ressource | Quantité | Prix unitaire (USD) | Sous-total 24h (USD) |
 |-----------|----------|---------------------|----------------------|
-| EC2 t3.small | `<!-- N -->` | `<!-- $/h -->` | `<!-- $ -->` |
-| ALB | 1 | `<!-- $/h -->` | `<!-- $ -->` |
-| NAT Gateway | `<!-- 1 ou 2 -->` | `<!-- $/h -->` | `<!-- $ -->` |
-| RDS db.t3.micro Multi-AZ | 1 | `<!-- $/h -->` | `<!-- $ -->` |
-| EBS RDS gp3 | `<!-- GB -->` | `<!-- $/GB-mois -->` | `<!-- $ -->` |
-| S3 primary + logs | `<!-- GB -->` | `<!-- $/GB-mois -->` | `<!-- $ -->` |
-| KMS CMK | 1 | `1.00 / mois` | `<!-- $ -->` |
-| Secrets Manager | 2 | `0.40 / secret / mois` | `<!-- $ -->` |
-| VPC Endpoints | `<!-- N -->` | `<!-- $/h -->` | `<!-- $ -->` |
-| **Total 24h** | | | `<!-- $ -->` |
-| **Extrapolation 30 jours** | | | `<!-- $ -->` |
+| EC2 t3.small | `<!-- 1 -->` | `<!-- 0.0208/h -->` | `<!-- 50 -->` |
+| ALB | 1 | `<!-- 0.0252/h + LCU-->` | `<!-- 70 -->` |
+| NAT Gateway | `<!-- 1 ou 2 -->` | `<!-- 0.048/h -->` | `<!-- 1.15 -->` |
+| RDS db.t3.micro Multi-AZ | 1 | `<!-- 0.034/h -->` | `<!-- 0.82 -->` |
+| EBS RDS gp3 | `<!-- 20GB -->` | `<!-- 0.0029/GB-mois -->` | `<!-- 0.06 -->` |
+| S3 primary + logs | `<!-- 1 GB -->` | `<!-- 0.0008/GB-mois -->` | `<!-- 0.01 -->` |
+| KMS CMK | 1 | `1.00 / mois` | `<!-- 0.03 -->` |
+| Secrets Manager | 2 | `0.40 / secret / mois` | `<!-- 0.03-->` |
+| VPC Endpoints | `<!-- 2 -->` | `<!-- 0.01/h -->` | `<!-- 48 -->` |
+| **Total 24h** | | | `<!-- 3.78 -->` |
+| **Extrapolation 30 jours** | | | `<!-- 113 -->` |
 
 > *Exemple : Total 24h ~= 6.10 USD, extrapolation 30 jours ~= 183 USD.*
 
-**Méthode utilisée** : `TODO` (Infracost / calculator AWS / estimation manuelle)
+**Méthode utilisée** :estimation manuelle à partir de la page de tarification AWS eu-west-3 (Paris).
 
 **Commentaire** :
 
 > *Exemple : le NAT Gateway seul représente ~35% du coût — on pourrait le supprimer après le boot initial de Nextcloud en `dev` puisque l'instance n'a plus besoin de sortir d'Internet.*
 
-<!-- remplir ici -->
+<!-- Le NAT Gateway et les VPC Endpoints Interface représentent ensemble plus de 40% du coût journalier. En production, on pourrait envisager de supprimer le NAT Gateway après le boot initial de l'EC2 (puisque le trafic S3/Secrets/KMS passe déjà par les endpoints dédiés), ce qui réduirait encore le coût mensuel. -->
 
 ---
 
@@ -223,27 +277,27 @@ Estimez le coût de l'infrastructure pour 24h de fonctionnement (dev). Utilisez 
 
 ### 🟢 3 choses qui ont bien marché
 
-1. `<!-- remplir -->`
-2. `<!-- remplir -->`
-3. `<!-- remplir -->`
+1. Le fait de figer les interfaces (variables/outputs) au kick-off a permis à chaque rôle de travailler en parallèle sans se bloquer mutuellement.
+2. La répartition claire des modules (networking, compute, data, security) a évité les conflits Git majeurs sur les fichiers `.tf`.
+3. Le starter kit fourni (arborescence + providers déjà configurés) a fait gagner un temps précieux en début de journée.
 
 > *Exemple : "Le fait de figer les interfaces au kick-off nous a permis de travailler en parallèle sans se marcher dessus."*
 
 ### 🔴 3 choses qui ont bloqué
 
-1. `<!-- remplir -->`
-2. `<!-- remplir -->`
-3. `<!-- remplir -->`
 
-> *Exemple : "Cycle de dépendance entre security et data — perdu 45 min avant de comprendre qu'il fallait passer les ARN en variable plutôt que `depends_on`."*
+1. La configuration initiale de l'environnement (versions Terraform incompatibles, mise à jour manuelle du binaire pour certains membres).
+2. La gestion des droits d'accès GitHub (permissions de push sur les branches de rôle) a pris du temps à résoudre.
+3. La correction tardive des régions `eu-west-1` → `eu-west-3` dans plusieurs fichiers du starter, qu'il a fallu identifier et corriger après coup.
+> *Exemple : "Cycle de dépendance entre security et data — perdu 45 min avant de comprendre qu'il fallait passer les ARN en variable plutôt que `depends_on`."
 
 ### 🔷 3 améliorations pour la prochaine fois
 
-1. `<!-- remplir -->`
-2. `<!-- remplir -->`
-3. `<!-- remplir -->`
+1. Vérifier dès le matin les versions des outils (Terraform, AWS CLI) et les droits Git de chaque membre avant de commencer.
+2. Faire une relecture collective du starter kit pour repérer toutes les références régionales incorrectes avant de répartir les rôles.
+3. Mettre en place un canal de communication dédié pour signaler immédiatement les changements d'interface entre modules.
 
-> *Exemple : "Installer tfsec dans le pre-commit dès le matin aurait évité 3 HIGH détectés en fin de journée."*
+> *Exemple : "nstaller tfsec dans le pre-commit dès le matin aurait évité 3 HIGH détectés en fin de journée."*
 
 ---
 
@@ -257,27 +311,24 @@ Estimez le coût de l'infrastructure pour 24h de fonctionnement (dev). Utilisez 
 
 ### Rôle 1 — Platform Lead
 
-**Membre** : `<!-- Prénom Nom -->`
+**Membre** : `<!--Lucie Bigouraux -->`
 
 **Ce que j'ai livré** :
-
-- `<!-- ex: bootstrap/create-state-bucket.sh -->`
-- `<!-- ex: global/iam-github-oidc/ (bonus) -->`
-- `<!-- ex: envs/dev/backend.tf, providers.tf, main.tf -->`
-- `<!-- ex: revue de toutes les PRs avec au moins 1 approval -->`
-- `<!-- ex: orchestration du terraform apply collectif à 14h30 -->`
-
+bootstrap/create-state-bucket.sh
+nvs/dev/backend.tf, providers.tf, main.tf
+la gestion du GitHub de base
 **Ce qui m'a surpris ou frustré** :
 
 > *Exemple : "J'ai sous-estimé le temps de bootstrap du bucket state — 15 min à cause d'une IAM policy S3 manquante pour KMS."*
 
-<!-- remplir ici -->
+<!-- La mise en place un peu longue
+  -->
 
 **Ce que j'ai appris** :
 
 > *Exemple : "La feature `use_lockfile` du backend S3 natif en 1.10 remplace complètement DynamoDB — plus simple et moins cher."*
 
-<!-- remplir ici -->
+<!-- une meilleur compréhension de GitHub -->
 
 **Hash du dernier commit significatif que j'ai fait** : `<!-- ex: a1b2c3d -->`
 
@@ -302,79 +353,80 @@ La différence entre les VPC endpoints de type Gateway (S3, gratuit, ajoute just
 **Ce que j'ai appris :**
 À structurer un module Terraform en plusieurs fichiers (variables, outputs, locals, main, versions), à utiliser `for_each` avec des maps AZ → CIDR calculées via `cidrsubnet()`, et le rôle des VPC endpoints pour réduire le trafic NAT.
 
-**Hash du dernier commit significatif que j'ai fait :** `efb0e95`
+**Hash du dernier commit significatif que j'ai fait :** `137ee78`
 
 
 ### Rôle 3 — Compute Engineer
 
-**Membre** : `<!-- Prénom Nom -->`
+**Membre** : `<!-- Yann Neguen -->`
 
 **Ce que j'ai livré** :
 
-- `<!-- ex: modules/compute/alb.tf — ALB + TG + listener HTTPS self-signed -->`
-- `<!-- ex: modules/compute/asg.tf — launch template + ASG single -->`
-- `<!-- ex: templates/nextcloud-user-data.sh.tftpl — script Docker run Nextcloud -->`
-- `<!-- ex: outputs alb_dns_name, nextcloud_url, asg_name -->`
+-modules/computes/main.tf   data AMI Amazon Linux 2023 + data aws_region + certificat TLS self-signed RSA 4096 + import ACM
+ 
+- modules/computes/main.tf  ALB public + Target Group (health check /status.php) + listener HTTPS/443 + redirect HTTP/80 → 443  .                       
+-modules/computes/asg.tf   Launch Template (IMDSv2 obligatoire, EBS gp3 chiffré) + ASG min=1 max=2 desired=1                                             templates/nextcloud-user-data.sh.tfpl  script boot EC2 : install Docker, attente RDS, récupération secrets via Secrets Manager, docker run nextcloud:30-apache
 
 **Ce qui m'a surpris ou frustré** :
 
 > *Exemple : "Le user_data a mis 4 minutes à finir — il faut attendre l'install Docker + pull de l'image Nextcloud avant que le health check ALB passe."*
 
-<!-- remplir ici -->
+<!-- remplir ici --> Le http_putresponse_hop_limit dans les metadata_options est indispensable pour que le container Docker puisse accéder à l'IMDS et récupérer les credentials IAM — sans ça Nextcloud ne peut pas écrire sur S3
 
 **Ce que j'ai appris** :
 
-<!-- remplir ici -->
+<!-- remplir ici -->La syntaxe du template .tfpl est piégeuse  ,{var} est interprété par Terraform mais $$var est necessaire pour les variables bash, une confusion entre les deux casse silencieusement le script au boot de l'EC2."
 
-**Hash du dernier commit significatif que j'ai fait** : `<!-- ex: a1b2c3d -->`
+**Hash du dernier commit significatif que j'ai fait** : `<!-- 5144327-->`
 
 ---
 
 ### Rôle 4 — Data Engineer
 
-**Membre** : `<!-- Prénom Nom -->`
+**Membre** : `<!-- Junias Gbenou -->`
 
 **Ce que j'ai livré** :
 
-- `<!-- ex: modules/data/rds.tf — RDS PG Multi-AZ, subnet group, parameter group -->`
-- `<!-- ex: modules/data/s3.tf — bucket primary + bucket logs avec SSE-KMS, block public, versioning, bucket policy ALB -->`
-- `<!-- ex: outputs db_endpoint, db_name, s3_primary_bucket_name, s3_logs_bucket_name -->`
-- `<!-- ex: README.md du module -->`
+- modules/data/rds.tf — RDS PostgreSQL Multi-AZ, subnet group, et parameter group avec rds.force_ssl activé.
+- modules/data/s3.tf — Bucket primary (stockage Nextcloud avec versioning et chiffrement KMS via CMK) et Bucket logs (access logs ALB avec chiffrement SSE-AES256 standard, blocage des accès publics complet, et règle de cycle de vie Glacier).
+- modules/data/main.tf, variables.tf, outputs.tf, versions.tf — Répartition et clean-up complet de l'architecture du module pour respecter les standards Terraform.
+- outputs : db_endpoint, db_port, db_name, db_username, s3_primary_bucket_name, s3_primary_bucket_arn, s3_logs_bucket_name, s3_logs_bucket_arn.
 
 **Ce qui m'a surpris ou frustré** :
 
 > *Exemple : "La bucket policy pour laisser l'ALB écrire ses access logs — il faut utiliser le service principal correct et autoriser PutObject."*
 
-<!-- remplir ici -->
+<!-- remplir ici --> La configuration de la bucket policy pour les access logs de l'ALB : il a fallu s'assurer d'utiliser l'identifiant de compte de service ELB AWS correct (via la data source aws_elb_service_account) et forcer l'utilisation de l'algorithme AES256 à la place de KMS, car l'ALB refuse nativement d'écrire sur du S3 chiffré par une clé KMS personnalisée.
 
 **Ce que j'ai appris** :
 
-<!-- remplir ici -->
+<!-- remplir ici --> J'ai appris à structurer proprement un module Terraform en séparant rigoureusement les variables, les outputs, la logique de base et les versions de providers, plutôt que de tout centraliser dans un seul fichier. J'ai aussi pratiqué la récupération de commits et la résolution d'arborescences de branches via le Git Reflog et le reset hard lors d'un incident de synchronisation locale.
 
-**Hash du dernier commit significatif que j'ai fait** : `<!-- ex: a1b2c3d -->`
+**Hash du dernier commit significatif que j'ai fait** : `<!-- ex: a1b2c3d -->`24a8a0a
 
 ---
 
 ### Rôle 5 — Security Engineer
 
-**Membre** : `<!-- Prénom Nom — ou "N/A équipe à 4, fusionné avec Rôle 1" -->`
+**Membre** : `<!-- Lucie Bigouraux  — ou "N/A équipe à 4, fusionné avec Rôle 1" -->`
 
 **Ce que j'ai livré** :
 
-- `<!-- ex: modules/security/sg.tf — 3 SG (alb, app, db) avec aws_vpc_security_group_ingress_rule v5 -->`
-- `<!-- ex: modules/security/kms.tf — CMK + alias + rotation activée -->`
-- `<!-- ex: modules/security/iam.tf — IAM role EC2 + instance profile + policies scoped S3/Secrets -->`
-- `<!-- ex: modules/security/secrets.tf — 2 secrets (db_password, admin_password) générés via random_password -->`
+modules/security/sg.tf
+modules/security/kms.tf
+modules/security/iam.tf
+modules/security/secrets.tf
 
 **Ce qui m'a surpris ou frustré** :
 
 > *Exemple : "La policy IAM avec `Resource` scoped au bucket ARN exact + `${arn}/*` pour les objets — tfsec flag tous les `Resource = *`."*
 
-<!-- remplir ici -->
+<!-- la redondance -->
 
 **Ce que j'ai appris** :
 
-<!-- remplir ici -->
+<!-- remplir ici --> 
+une meilleurs connaissance des différents point de sécurité
 
 **Hash du dernier commit significatif que j'ai fait** : `<!-- ex: a1b2c3d -->`
 
